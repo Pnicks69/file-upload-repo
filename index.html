@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Management</title>
+    <title>File Management App</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -20,6 +20,7 @@
         nav a {
             color: white;
             text-decoration: none;
+            cursor: pointer;
         }
         nav a:hover {
             text-decoration: underline;
@@ -27,93 +28,131 @@
         .container {
             padding: 2em;
         }
-        .file {
+        #dashboard, #upload {
+            display: none;
+        }
+        #dashboard.active, #upload.active {
+            display: block;
+        }
+        .upload-area {
+            border: 2px dashed #333;
+            padding: 2em;
+            text-align: center;
+            margin-bottom: 1em;
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+        .upload-area.dragover {
+            background-color: #e0f7fa;
+            border-color: #00796b;
+        }
+        .file-list {
+            margin-top: 1em;
+        }
+        .file-item {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 0.5em;
+            align-items: center;
             padding: 0.5em;
             border: 1px solid #ddd;
             border-radius: 5px;
+            margin-bottom: 0.5em;
         }
-        .file button {
-            background-color: red;
+        .progress-bar {
+            width: 100%;
+            background-color: #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 0.5em;
+        }
+        .progress-bar-inner {
+            height: 10px;
+            background-color: #4caf50;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        button {
+            background-color: #4caf50;
             color: white;
             border: none;
-            padding: 0.3em 0.5em;
+            padding: 0.5em 1em;
             cursor: pointer;
+            border-radius: 5px;
         }
-        .file button:hover {
-            background-color: darkred;
+        button:hover {
+            background-color: #45a049;
         }
     </style>
-    <script type="module">
-        // Import the Firebase SDKs
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+</head>
+<body>
+    <nav>
+        <a onclick="showSection('dashboard')">Dashboard</a>
+        <a onclick="showSection('upload')">Upload</a>
+    </nav>
+    <div id="dashboard" class="container active">
+        <h1>Dashboard</h1>
+        <div id="file-list">
+            <p>Loading files...</p>
+        </div>
+    </div>
+    <div id="upload" class="container">
+        <h1>Upload Files</h1>
+        <div id="upload-area" class="upload-area">
+            Drag & Drop files here or click to upload
+            <input type="file" id="file-input" multiple hidden>
+        </div>
+        <button id="upload-button" disabled>Upload</button>
+        <div id="file-list-upload" class="file-list"></div>
+    </div>
 
-        // Firebase configuration
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
+
+        // Firebase Configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyBiahfJ3hNk_wqX9hy3PdE7eNPZrHgR_uM",
-            authDomain: "file-upload-app-d299b.firebaseapp.com",
-            projectId: "file-upload-app-d299b",
-            storageBucket: "file-upload-app-d299b.appspot.com",
-            messagingSenderId: "10641864620",
-            appId: "1:10641864620:web:373b7da6a0612e563dac09",
-            measurementId: "G-HDHBNKTBV6"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const storage = getStorage(app);
 
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadButton = document.getElementById('upload-button');
+        const fileListUpload = document.getElementById('file-list-upload');
+        const dashboardList = document.getElementById('file-list');
+
+        let selectedFiles = [];
+
+        // Show Sections
         function showSection(section) {
-            document.getElementById('dashboard').style.display = section === 'dashboard' ? 'block' : 'none';
-            document.getElementById('upload').style.display = section === 'upload' ? 'block' : 'none';
+            document.getElementById('dashboard').classList.remove('active');
+            document.getElementById('upload').classList.remove('active');
+            document.getElementById(section).classList.add('active');
         }
 
-        async function uploadFiles() {
-            const input = document.getElementById('file-input');
-            if (input.files.length === 0) return;
-
-            for (let file of input.files) {
-                const fileName = file.name;
-
-                // Add file to Firestore
-                try {
-                    await addDoc(collection(db, "files"), { name: fileName });
-                    console.log(`File '${fileName}' uploaded successfully.`);
-                } catch (error) {
-                    console.error("Error uploading file: ", error);
-                }
-            }
-
-            input.value = '';
-            updateFileDisplays();
-        }
-
-        async function updateFileDisplays() {
-            const fileList = document.getElementById('file-list');
-            const uploadedFiles = document.getElementById('uploaded-files');
-
+        // Fetch and Display Files in Dashboard
+        async function updateDashboard() {
+            dashboardList.innerHTML = '<p>Loading files...</p>';
             try {
                 const querySnapshot = await getDocs(collection(db, "files"));
                 const files = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
                 if (files.length === 0) {
-                    fileList.innerHTML = '<p>No files uploaded yet.</p>';
-                    uploadedFiles.innerHTML = '<p>No files uploaded yet.</p>';
+                    dashboardList.innerHTML = '<p>No files uploaded yet.</p>';
                 } else {
-                    fileList.innerHTML = files.map(file => `
-                        <div class="file">
+                    dashboardList.innerHTML = files.map(file => `
+                        <div class="file-item">
                             <span>${file.name}</span>
-                            <button onclick="deleteFile('${file.id}')">Delete</button>
-                        </div>
-                    `).join('');
-
-                    uploadedFiles.innerHTML = files.map(file => `
-                        <div class="file">
-                            <span>${file.name}</span>
-                            <button onclick="deleteFile('${file.id}')">Delete</button>
+                            <a href="${file.url}" target="_blank">View</a>
                         </div>
                     `).join('');
                 }
@@ -122,39 +161,85 @@
             }
         }
 
-        async function deleteFile(fileId) {
-            try {
-                await deleteDoc(doc(db, "files", fileId));
-                console.log(`File with ID '${fileId}' deleted successfully.`);
-                updateFileDisplays();
-            } catch (error) {
-                console.error("Error deleting file: ", error);
-            }
+        // Drag and Drop Events
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        // Click to Select Files
+        uploadArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+        // Handle Selected Files
+        function handleFiles(files) {
+            Array.from(files).forEach(file => {
+                selectedFiles.push(file);
+                displayFile(file);
+            });
+            uploadButton.disabled = selectedFiles.length === 0;
         }
 
-        // Initialize the display on page load
-        document.addEventListener('DOMContentLoaded', updateFileDisplays);
+        // Display File in Upload List
+        function displayFile(file) {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+                <span>${file.name}</span>
+                <button onclick="removeFile('${file.name}')">Remove</button>
+                <div class="progress-bar">
+                    <div class="progress-bar-inner" id="progress-${file.name}"></div>
+                </div>
+            `;
+            fileListUpload.appendChild(fileItem);
+        }
+
+        // Remove File from List
+        window.removeFile = (fileName) => {
+            selectedFiles = selectedFiles.filter(file => file.name !== fileName);
+            fileListUpload.innerHTML = '';
+            selectedFiles.forEach(displayFile);
+            uploadButton.disabled = selectedFiles.length === 0;
+        };
+
+        // Upload Files
+        uploadButton.addEventListener('click', async () => {
+            for (const file of selectedFiles) {
+                const storageRef = ref(storage, `uploads/${file.name}`);
+                const uploadTask = uploadBytesResumable(storageRef, file);
+
+                uploadTask.on('state_changed',
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        document.getElementById(`progress-${file.name}`).style.width = `${progress}%`;
+                    },
+                    (error) => console.error(`Error uploading ${file.name}:`, error),
+                    async () => {
+                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        await addDoc(collection(db, "files"), { name: file.name, url: downloadURL });
+                        console.log(`File '${file.name}' uploaded successfully.`);
+                        updateDashboard();
+                    }
+                );
+            }
+
+            selectedFiles = [];
+            fileListUpload.innerHTML = '';
+            uploadButton.disabled = true;
+        });
+
+        // Initialize Dashboard
+        document.addEventListener('DOMContentLoaded', updateDashboard);
     </script>
-</head>
-<body>
-    <nav>
-        <a href="#" onclick="showSection('dashboard')">Dashboard</a>
-        <a href="#" onclick="showSection('upload')">Upload</a>
-    </nav>
-    <div id="dashboard" class="container">
-        <h1>Dashboard</h1>
-        <div id="file-list">
-            <p>No files uploaded yet.</p>
-        </div>
-    </div>
-    <div id="upload" class="container" style="display: none;">
-        <h1>Upload Files</h1>
-        <input type="file" id="file-input" multiple>
-        <button onclick="uploadFiles()">Upload</button>
-        <h2>Uploaded Files</h2>
-        <div id="uploaded-files">
-            <p>No files uploaded yet.</p>
-        </div>
-    </div>
 </body>
 </html>
