@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        nav {
+            background-color: #333;
+            color: white;
+            padding: 1em;
+            display: flex;
+            gap: 1em;
+        }
+        nav a {
+            color: white;
+            text-decoration: none;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            padding: 2em;
+        }
+        .file {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5em;
+            padding: 0.5em;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .file button {
+            background-color: red;
+            color: white;
+            border: none;
+            padding: 0.3em 0.5em;
+            cursor: pointer;
+        }
+        .file button:hover {
+            background-color: darkred;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="#" onclick="showSection('dashboard')">Dashboard</a>
+        <a href="#" onclick="showSection('upload')">Upload</a>
+    </nav>
+    <div id="dashboard" class="container">
+        <h1>Dashboard</h1>
+        <div id="file-list">
+            <p>No files uploaded yet.</p>
+        </div>
+    </div>
+    <div id="upload" class="container" style="display: none;">
+        <h1>Upload Files</h1>
+        <input type="file" id="file-input" multiple>
+        <button onclick="uploadFiles()">Upload</button>
+        <h2>Uploaded Files</h2>
+        <div id="uploaded-files">
+            <p>No files uploaded yet.</p>
+        </div>
+    </div>
+
+    <script>
+        const fileList = document.getElementById('file-list');
+        const uploadedFiles = document.getElementById('uploaded-files');
+        const files = [];
+
+        function showSection(section) {
+            document.getElementById('dashboard').style.display = section === 'dashboard' ? 'block' : 'none';
+            document.getElementById('upload').style.display = section === 'upload' ? 'block' : 'none';
+        }
+
+        function uploadFiles() {
+            const input = document.getElementById('file-input');
+            if (input.files.length === 0) return;
+
+            for (let file of input.files) {
+                files.push(file.name);
+            }
+            input.value = '';
+            updateFileDisplays();
+        }
+
+        function deleteFile(fileName) {
+            const index = files.indexOf(fileName);
+            if (index !== -1) files.splice(index, 1);
+            updateFileDisplays();
+        }
+
+        function updateFileDisplays() {
+            // Update dashboard
+            if (files.length === 0) {
+                fileList.innerHTML = '<p>No files uploaded yet.</p>';
+            } else {
+                fileList.innerHTML = files.map(file => `
+                    <div class="file">
+                        <span>${file}</span>
+                        <button onclick="deleteFile('${file}')">Delete</button>
+                    </div>
+                `).join('');
+            }
+
+            // Update upload section
+            if (files.length === 0) {
+                uploadedFiles.innerHTML = '<p>No files uploaded yet.</p>';
+            } else {
+                uploadedFiles.innerHTML = files.map(file => `
+                    <div class="file">
+                        <span>${file}</span>
+                        <button onclick="deleteFile('${file}')">Delete</button>
+                    </div>
+                `).join('');
+            }
+        }
+    </script>
+</body>
+</html>
