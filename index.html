@@ -46,6 +46,8 @@
             background-color: darkred;
         }
     </style>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js"></script>
 </head>
 <body>
     <nav>
@@ -69,41 +71,60 @@
     </div>
 
     <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "your-api-key",
+            authDomain: "your-auth-domain",
+            projectId: "your-project-id",
+            storageBucket: "your-storage-bucket",
+            messagingSenderId: "your-messaging-sender-id",
+            appId: "your-app-id"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
         const fileList = document.getElementById('file-list');
         const uploadedFiles = document.getElementById('uploaded-files');
-        const files = [];
 
         function showSection(section) {
             document.getElementById('dashboard').style.display = section === 'dashboard' ? 'block' : 'none';
             document.getElementById('upload').style.display = section === 'upload' ? 'block' : 'none';
         }
 
-        function uploadFiles() {
+        async function uploadFiles() {
             const input = document.getElementById('file-input');
             if (input.files.length === 0) return;
 
             for (let file of input.files) {
-                files.push(file.name);
+                const fileName = file.name;
+
+                // Add file to Firestore
+                await db.collection('files').add({ name: fileName });
             }
             input.value = '';
             updateFileDisplays();
         }
 
-        function deleteFile(fileName) {
-            const index = files.indexOf(fileName);
-            if (index !== -1) files.splice(index, 1);
+        async function deleteFile(fileId) {
+            // Delete file from Firestore
+            await db.collection('files').doc(fileId).delete();
             updateFileDisplays();
         }
 
-        function updateFileDisplays() {
+        async function updateFileDisplays() {
+            const snapshot = await db.collection('files').get();
+            const files = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
             // Update dashboard
             if (files.length === 0) {
                 fileList.innerHTML = '<p>No files uploaded yet.</p>';
             } else {
                 fileList.innerHTML = files.map(file => `
                     <div class="file">
-                        <span>${file}</span>
-                        <button onclick="deleteFile('${file}')">Delete</button>
+                        <span>${file.name}</span>
+                        <button onclick="deleteFile('${file.id}')">Delete</button>
                     </div>
                 `).join('');
             }
@@ -114,12 +135,15 @@
             } else {
                 uploadedFiles.innerHTML = files.map(file => `
                     <div class="file">
-                        <span>${file}</span>
-                        <button onclick="deleteFile('${file}')">Delete</button>
+                        <span>${file.name}</span>
+                        <button onclick="deleteFile('${file.id}')">Delete</button>
                     </div>
                 `).join('');
             }
         }
+
+        // Initialize the display on page load
+        updateFileDisplays();
     </script>
 </body>
 </html>
