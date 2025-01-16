@@ -107,10 +107,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
 
-        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY",
             authDomain: "YOUR_AUTH_DOMAIN",
@@ -132,20 +131,15 @@
 
         let selectedFiles = [];
 
-        // Show Sections
         function showSection(section) {
             document.getElementById('dashboard').classList.remove('active');
             document.getElementById('upload').classList.remove('active');
             document.getElementById(section).classList.add('active');
         }
 
-        // Fetch and Display Files in Dashboard
         async function updateDashboard() {
-            dashboardList.innerHTML = '<p>Loading files...</p>';
-            try {
-                const querySnapshot = await getDocs(collection(db, "files"));
-                const files = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
+            onSnapshot(collection(db, "files"), (snapshot) => {
+                const files = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 if (files.length === 0) {
                     dashboardList.innerHTML = '<p>No files uploaded yet.</p>';
                 } else {
@@ -156,20 +150,15 @@
                         </div>
                     `).join('');
                 }
-            } catch (error) {
-                console.error("Error fetching files: ", error);
-            }
+            });
         }
 
-        // Drag and Drop Events
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadArea.classList.add('dragover');
         });
 
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
 
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
@@ -177,11 +166,9 @@
             handleFiles(e.dataTransfer.files);
         });
 
-        // Click to Select Files
         uploadArea.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', () => handleFiles(fileInput.files));
 
-        // Handle Selected Files
         function handleFiles(files) {
             Array.from(files).forEach(file => {
                 selectedFiles.push(file);
@@ -190,7 +177,6 @@
             uploadButton.disabled = selectedFiles.length === 0;
         }
 
-        // Display File in Upload List
         function displayFile(file) {
             const fileItem = document.createElement('div');
             fileItem.className = 'file-item';
@@ -204,7 +190,6 @@
             fileListUpload.appendChild(fileItem);
         }
 
-        // Remove File from List
         window.removeFile = (fileName) => {
             selectedFiles = selectedFiles.filter(file => file.name !== fileName);
             fileListUpload.innerHTML = '';
@@ -212,7 +197,6 @@
             uploadButton.disabled = selectedFiles.length === 0;
         };
 
-        // Upload Files
         uploadButton.addEventListener('click', async () => {
             for (const file of selectedFiles) {
                 const storageRef = ref(storage, `uploads/${file.name}`);
@@ -227,18 +211,15 @@
                     async () => {
                         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                         await addDoc(collection(db, "files"), { name: file.name, url: downloadURL });
-                        console.log(`File '${file.name}' uploaded successfully.`);
                         updateDashboard();
                     }
                 );
             }
-
             selectedFiles = [];
             fileListUpload.innerHTML = '';
             uploadButton.disabled = true;
         });
 
-        // Initialize Dashboard
         document.addEventListener('DOMContentLoaded', updateDashboard);
     </script>
 </body>
